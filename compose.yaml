@@ -1,0 +1,39 @@
+# Standalone. Nothing external is required — no pre-created networks, no sibling
+# compose projects.
+#
+#   docker compose up -d --build
+#   curl -fsS http://127.0.0.1:8787/healthz   # -> ok
+#
+# To put it behind a reverse proxy on a shared Docker network, layer the
+# override on top:
+#
+#   docker compose -f compose.yaml -f compose.proxy.yaml up -d --build
+
+name: ${COMPOSE_PROJECT_NAME:-jira-mcp}
+
+services:
+  jira-mcp:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Container always listens on 8787 internally; JIRA_MCP_PORT is host-side
+      # only, and the image already defaults JIRA_MCP_LISTEN to 0.0.0.0 so the
+      # published port can reach it.
+      JIRA_MCP_PORT: "8787"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # The SDK checks the Host header against an allowlist (DNS-rebinding
+      # protection). Direct loopback access arrives carrying the *published*
+      # port, so it has to be named here or a changed JIRA_MCP_PORT breaks with
+      # a bare "Invalid Host header".
+      JIRA_MCP_ALLOWED_HOSTS: 127.0.0.1:${JIRA_MCP_PORT:-8787},localhost:${JIRA_MCP_PORT:-8787}
+    ports:
+      # Loopback by default. Widen this only with TLS in front — see SECURITY.md.
+      - ${JIRA_MCP_BIND_ADDRESS:-127.0.0.1}:${JIRA_MCP_PORT:-8787}:8787
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M

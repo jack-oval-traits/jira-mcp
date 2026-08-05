@@ -1,0 +1,60 @@
+[project]
+name = "jira-mcp"
+version = "0.1.0"
+description = "Token-lean MCP adapter in front of the Jira Cloud REST API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jack O'val Traits" }]
+keywords = ["mcp", "jira", "atlassian", "llm", "claude"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Bug Tracking",
+]
+dependencies = [
+    # MCPServer lives in the 2.x SDK. On 1.x the class is named FastMCP and the
+    # import in server.py fails outright, so this floor is load-bearing.
+    "mcp>=2.0,<3",
+    "httpx>=0.27",
+    "marklas>=0.8",
+    "uvicorn>=0.30",
+    "starlette>=0.37",
+]
+
+[project.optional-dependencies]
+# tiktoken is only needed by scripts/token_compare.py, so it is its own extra --
+# the image installs [measure] and skips the test tooling entirely.
+measure = ["tiktoken>=0.7"]
+dev = ["jira-mcp[measure]", "pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+jira-mcp = "jira_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/jack-oval-traits/jira-mcp"
+Source = "https://github.com/jack-oval-traits/jira-mcp"
+Issues = "https://github.com/jack-oval-traits/jira-mcp/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jira_mcp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 assert, S105/S106 "hardcoded password" on fixture strings like page tokens.
+"tests/*" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

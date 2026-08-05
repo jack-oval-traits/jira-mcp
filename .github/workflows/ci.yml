@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv pip install --system ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t jira-mcp:ci .
+
+      - name: Fake credentials fail startup loudly
+        run: |
+          set +e
+          docker run --name creds \
+            -e JIRA_BASE_URL=https://example.atlassian.net \
+            -e JIRA_EMAIL=ci@example.com \
+            -e JIRA_API_TOKEN=fake \
+            -e JIRA_MCP_TOKEN=fake \
+            jira-mcp:ci
+          code=$?
+          set -e
+          test "$code" -ne 0 || { echo "expected startup to fail on fake credentials"; exit 1; }
+          docker logs creds 2>&1 | grep -q "jira-mcp:" \
+            || { echo "no startup diagnosis in logs:"; docker logs creds; exit 1; }
+
+      - name: Boot with the startup check off and probe /healthz
+        run: |
+          docker run -d --name ci -p 127.0.0.1:8787:8787 \
+            -e JIRA_MCP_STARTUP_CHECK=off \
+            -e JIRA_BASE_URL=https://example.atlassian.net \
+            -e JIRA_EMAIL=ci@example.com \
+            -e JIRA_API_TOKEN=fake \
+            -e JIRA_MCP_TOKEN=ci-bearer-token \
+            jira-mcp:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8787/healthz | grep -q ok; then
+              echo "healthy"; exit 0
+            fi
+            sleep 1
+          done
+          echo "never became healthy"; docker logs ci; exit 1
+
+      - name: Bearer token is enforced
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/mcp)
+          test "$code" = "401" || { echo "expected 401, got $code"; exit 1; }
+
+      - name: MCP initialize handshake succeeds with the bearer
+        run: |
+          resp=$(curl -fsS http://127.0.0.1:8787/mcp \
+            -H 'Authorization: Bearer ci-bearer-token' \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}')
+          echo "$resp" | grep -q '"serverInfo"' \
+            || { echo "unexpected initialize response: $resp"; exit 1; }

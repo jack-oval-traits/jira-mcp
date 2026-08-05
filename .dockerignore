@@ -1,0 +1,20 @@
+# The Dockerfile COPYs explicit paths, so nothing here can reach the image —
+# this only keeps the build context small and keeps .env off the daemon socket.
+.env
+.git/
+.github/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+tests/
+compose*.yaml
+SECURITY.md
+uv.lock
+
+# LICENSE is NOT ignored — pyproject sets license-files, so the wheel build
+# needs it in the context.

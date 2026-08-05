@@ -1,0 +1,21 @@
+# Secrets — .env holds a live Jira API token and the server's bearer secret.
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+.DS_Store

@@ -1,0 +1,35 @@
+# Optional overlay: join an existing reverse proxy's Docker network so the
+# adapter can be served on a hostname with TLS.
+#
+#   docker compose -f compose.yaml -f compose.proxy.yaml up -d --build
+#
+# Requires, in .env:
+#   JIRA_MCP_HOST   the hostname the proxy serves (e.g. jira-mcp.example.com)
+#   PROXY_NETWORK   name of the external network the proxy container is on
+#
+# The network must already exist — this file does not create it:
+#
+#   docker network create web
+#
+# Your proxy then forwards to `jira-mcp:8787` on that network. For Caddy:
+#
+#   jira-mcp.example.com {
+#       reverse_proxy jira-mcp:8787
+#   }
+#
+# JIRA_MCP_HOST is read by the server itself (see _allowed_hosts in server.py)
+# to accept the proxied Host header, so it must be set here as well as wherever
+# the proxy is configured.
+
+services:
+  jira-mcp:
+    networks:
+      default:
+      proxy:
+        aliases:
+          - jira-mcp
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-web}
