@@ -59,6 +59,11 @@ def test_detail_extends_summary():
     assert set(FIELDS_SUMMARY) <= set(FIELDS_DETAIL)
 
 
+def test_detail_fields_include_components_and_attachments():
+    assert "components" in FIELDS_DETAIL
+    assert "attachment" in FIELDS_DETAIL
+
+
 # --- summary_line -----------------------------------------------------------
 
 
@@ -184,6 +189,18 @@ def test_detail_text_labels_and_fix_versions():
     out = detail_text(issue(labels=["import", "regression"], fixVersions=[{"name": "1.2"}]))
     assert "labels: import, regression" in out
     assert "fixVersions: 1.2" in out
+
+
+def test_detail_text_components_and_attachments():
+    out = detail_text(
+        issue(
+            components=[{"name": "Mobile"}, {"name": "Checkout"}],
+            attachment=[{"filename": "design.png", "mimeType": "image/png"}],
+        )
+    )
+
+    assert "components: Mobile, Checkout" in out
+    assert "attachments: design.png (image/png)" in out
 
 
 # --- comments_text ----------------------------------------------------------

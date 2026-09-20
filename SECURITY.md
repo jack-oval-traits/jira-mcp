@@ -37,11 +37,11 @@ Treat it as equivalent to the Jira credential itself.
 
 ## Scope of the tool surface
 
-The seven tools include four writes (`create_issue`, `update_issue`,
-`add_comment`, `transition_issue`). There is no read-only mode. A client that
-reaches this server can modify your Jira project. If you want read-only access,
-run it with a Jira account whose project permissions are read-only — enforce it
-on the Jira side, not here.
+The ten tools include six writes (`create_issue`, `update_issue`,
+`attach_image`, `add_comment`, `transition_issue`, `link_issues`). There is no
+read-only mode. A client that reaches this server can modify your Jira project.
+If you want read-only access, run it with a Jira account whose project
+permissions are read-only — enforce it on the Jira side, not here.
 
 ## Reporting a vulnerability
 

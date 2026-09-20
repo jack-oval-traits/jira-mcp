@@ -1,6 +1,6 @@
 """MCP server exposing a small, token-lean surface over Jira Cloud.
 
-Seven tools instead of the ~45 the official Atlassian servers register, and
+Ten tools instead of the ~45 the official Atlassian servers register, and
 every response is normalized text rather than raw REST JSON. See normalize.py
 for where the savings actually come from.
 
@@ -9,7 +9,10 @@ Transport is streamable HTTP on :8787/mcp, guarded by a bearer token.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
+import mimetypes
 import os
 import secrets
 
@@ -59,6 +62,45 @@ def _env(name: str, default: str | None = None) -> str:
 
 def _adf(markdown: str) -> dict:
     return to_adf(markdown or "")
+
+
+def _names(value: str) -> list[dict[str, str]]:
+    """Turn a comma-separated Jira field into its REST representation."""
+    return [{"name": item.strip()} for item in value.split(",") if item.strip()]
+
+
+def _decode_image(filename: str, encoded: str, content_type: str) -> tuple[bytes, str]:
+    """Validate and decode an MCP-friendly image payload.
+
+    MCP tool arguments are JSON, so binary input arrives as base64. Accept a
+    plain base64 string or a browser-style ``data:image/...;base64,...`` URI.
+    """
+    if not filename.strip() or filename in {".", ".."} or "/" in filename or "\\" in filename:
+        raise ValueError("filename must be a plain file name without a path")
+
+    payload = encoded.strip()
+    embedded_type = ""
+    if payload.lower().startswith("data:"):
+        metadata, separator, payload = payload.partition(",")
+        if not separator or ";base64" not in metadata.lower():
+            raise ValueError("data URI must use base64 encoding")
+        embedded_type = metadata[5:].split(";", 1)[0].strip().lower()
+
+    try:
+        image = base64.b64decode("".join(payload.split()), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("image_base64 is not valid base64") from exc
+    if not image:
+        raise ValueError("image is empty")
+
+    media_type = (
+        content_type.strip().lower()
+        or embedded_type
+        or (mimetypes.guess_type(filename)[0] or "").lower()
+    )
+    if not media_type.startswith("image/"):
+        raise ValueError("content type must be an image type (for example image/png)")
+    return image, media_type
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +165,10 @@ async def create_issue(
     project: str = "",
     labels: str = "",
     parent: str = "",
+    components: str = "",
 ) -> str:
-    """Create an issue. `description` is Markdown. `labels` is comma-separated.
+    """Create an issue. `description` is Markdown. `labels` and `components`
+    are comma-separated. Components must already exist in the Jira project.
     `parent` is an issue key: required for a Subtask, and also how a Story or
     Task is placed under an Epic. Returns the new key only.
     """
@@ -139,6 +183,8 @@ async def create_issue(
         fields["description"] = _adf(description)
     if labels:
         fields["labels"] = [x.strip() for x in labels.split(",") if x.strip()]
+    if components:
+        fields["components"] = _names(components)
     if parent:
         # Subtasks cannot be created and then re-parented -- Jira rejects a
         # parent change on update -- so this has to be set at creation time.
@@ -159,9 +205,11 @@ async def update_issue(
     description: str = "",
     labels: str = "",
     assignee: str = "",
+    components: str = "",
 ) -> str:
     """Update an issue. Only non-empty arguments are applied. `description` is
-    Markdown; `assignee` is a display name or email. Returns a short ack.
+    Markdown; `assignee` is a display name or email; `components` is a
+    comma-separated list of existing component names. Returns a short ack.
     """
     fields: dict = {}
     if summary:
@@ -170,6 +218,8 @@ async def update_issue(
         fields["description"] = _adf(description)
     if labels:
         fields["labels"] = [x.strip() for x in labels.split(",") if x.strip()]
+    if components:
+        fields["components"] = _names(components)
 
     if assignee:
         try:
@@ -194,6 +244,31 @@ async def update_issue(
     except JiraError as exc:
         return str(exc)
     return f"{key} updated: {', '.join(fields)}"
+
+
+@mcp.tool()
+@measured
+async def attach_image(
+    key: str,
+    filename: str,
+    image_base64: str,
+    content_type: str = "",
+) -> str:
+    """Attach an image to an issue. `image_base64` may be plain base64 or a
+    `data:image/...;base64,...` URI. `filename` must not contain a path.
+    `content_type` is optional when it is in the data URI or filename.
+    """
+    try:
+        image, media_type = _decode_image(filename, image_base64, content_type)
+    except ValueError as exc:
+        return f"Invalid image: {exc}."
+
+    try:
+        attachments = await client().attach(key, filename, image, media_type)
+    except JiraError as exc:
+        return str(exc)
+    uploaded = attachments[0].get("filename", filename) if attachments else filename
+    return f"{key} attached image {uploaded}"
 
 
 @mcp.tool()
@@ -252,7 +327,7 @@ async def list_issue_types(project: str = "") -> str:
     if not types:
         return f"No creatable issue types found for {key}."
     return "\n".join(
-        "%s | subtask=%s" % (t.get("name", "?"), bool(t.get("subtask")))
+        f"{t.get('name', '?')} | subtask={bool(t.get('subtask'))}"
         for t in types
     )
 
@@ -399,7 +474,7 @@ def _check_credentials() -> None:
         raise RuntimeError(f"Credential check at {base}{API}/myself returned {r.status_code}.")
 
     who = (r.json() or {}).get("displayName") or email
-    # Says out loud whose name the four write tools will carry.
+    # Says out loud whose name the write tools will carry.
     logging.getLogger("jira-mcp").info("authenticated to %s as %s", base, who)
 
 

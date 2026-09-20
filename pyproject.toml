@@ -52,6 +52,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "S"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["jira_mcp"]
+
 [tool.ruff.lint.per-file-ignores]
 # S101 assert, S105/S106 "hardcoded password" on fixture strings like page tokens.
 "tests/*" = ["S101", "S105", "S106"]

@@ -39,6 +39,8 @@ FIELDS_DETAIL = FIELDS_SUMMARY + (
     "duedate",
     "resolution",
     "fixVersions",
+    "components",
+    "attachment",
     "subtasks",
     "issuelinks",
 )
@@ -138,6 +140,14 @@ def detail_text(issue: dict) -> str:
     add("resolution", _name(f.get("resolution")) if f.get("resolution") else "")
     add("labels", ", ".join(f.get("labels") or []))
     add("fixVersions", ", ".join(_name(v) for v in (f.get("fixVersions") or [])))
+    add("components", ", ".join(_name(v) for v in (f.get("components") or [])))
+    add(
+        "attachments",
+        ", ".join(
+            f"{a.get('filename', '?')} ({a.get('mimeType', 'unknown type')})"
+            for a in (f.get("attachment") or [])
+        ),
+    )
 
     if parent := f.get("parent"):
         pf = parent.get("fields") or {}

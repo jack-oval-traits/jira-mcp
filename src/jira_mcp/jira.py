@@ -107,6 +107,17 @@ class JiraClient:
     async def update(self, key: str, fields: dict) -> None:
         await self._request("PUT", f"{API}/issue/{key}", json={"fields": fields})
 
+    async def attach(
+        self, key: str, filename: str, content: bytes, content_type: str
+    ) -> list[dict]:
+        """Upload one attachment using Jira's required multipart field/header."""
+        return await self._request(
+            "POST",
+            f"{API}/issue/{key}/attachments",
+            headers={"X-Atlassian-Token": "no-check"},
+            files={"file": (filename, content, content_type)},
+        )
+
     async def link(self, link_type: str, inward_key: str, outward_key: str) -> None:
         """Link two issues. Direction matters: `inward_key` is the one the type's
         inward description reads from (for "Blocks", inward is blocked by outward).

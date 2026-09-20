@@ -1,6 +1,6 @@
 # jira-mcp
 
-A token-lean MCP server in front of Jira Cloud. Seven tools, normalized text
+A token-lean MCP server in front of Jira Cloud. Ten tools, normalized text
 responses, ADF descriptions converted to Markdown.
 
 ## Why
@@ -117,13 +117,20 @@ covers Jira issues only.
 | `search_issues(jql, limit, page_token)` | one line per issue, no descriptions |
 | `get_issue(key)` | full issue, description as Markdown |
 | `get_comments(key, limit)` | comments as Markdown, newest first |
-| `create_issue(summary, description, issue_type, project, labels)` | `PROJ-501 created` |
-| `update_issue(key, summary, description, labels, assignee)` | `PROJ-443 updated: summary` |
+| `create_issue(summary, description, issue_type, project, labels, parent, components)` | `PROJ-501 created` |
+| `update_issue(key, summary, description, labels, assignee, components)` | `PROJ-443 updated: summary` |
+| `attach_image(key, filename, image_base64, content_type)` | `PROJ-443 attached image design.png` |
 | `add_comment(key, body)` | `PROJ-443 commented` |
 | `transition_issue(key, status)` | `PROJ-443 -> Done`, or lists options |
+| `list_issue_types(project)` | creatable issue types and whether each is a subtask |
+| `link_issues(link_type, inward, outward)` | links two issues, or lists link types |
 
 Markdown goes in and comes out; the adapter converts to and from ADF at the
 boundary.
+
+`components` is a comma-separated list of component names that already exist
+in the target project. `attach_image` accepts either plain base64 or a
+`data:image/...;base64,...` URI and adds the image to Jira's Attachments section.
 
 `search_issues` returns lines shaped like:
 
@@ -272,8 +279,8 @@ ruff check .
 
 The adapter authenticates to Jira with Basic auth (email + API token), so it
 **acts as you**: it has your permissions and its writes carry your name. The
-bearer token is the only thing between the network and that Jira token, and four
-of the seven tools write.
+bearer token is the only thing between the network and that Jira token, and six
+of the ten tools write.
 
 Bind to loopback unless something in front terminates TLS. `/healthz` is
 deliberately unauthenticated; everything else is not. See
