@@ -1,6 +1,6 @@
 # jira-mcp
 
-A token-lean MCP server in front of Jira Cloud. Eleven tools, normalized text
+A token-lean MCP server in front of Jira Cloud. Thirteen tools, normalized text
 responses, ADF descriptions converted to Markdown.
 
 ## Why
@@ -116,10 +116,12 @@ covers Jira issues only.
 |---|---|
 | `search_issues(jql, limit, page_token)` | one line per issue, no descriptions |
 | `get_issue(key)` | full issue, description as Markdown |
+| `get_status_history(key)` | complete status-transition history, oldest first |
 | `get_comments(key, limit)` | comments as Markdown, newest first |
 | `create_issue(summary, description, issue_type, project, labels, parent, components)` | `PROJ-501 created` |
 | `update_issue(key, summary, description, labels, assignee, components)` | `PROJ-443 updated: summary` |
 | `set_dispatch_state(key, operation, ...)` | updates dispatcher-owned Jira fields with a short ack |
+| `set_workflow_state(key, operation, ...)` | sets only Loop Count or Active Agent |
 | `attach_image(key, filename, image_base64, content_type)` | `PROJ-443 attached image design.png` |
 | `add_comment(key, body)` | `PROJ-443 commented` |
 | `transition_issue(key, status)` | `PROJ-443 -> Done`, or lists options |

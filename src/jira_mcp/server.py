@@ -1,6 +1,6 @@
 """MCP server exposing a small, token-lean surface over Jira Cloud.
 
-Ten tools instead of the ~45 the official Atlassian servers register, and
+Thirteen tools instead of the ~45 the official Atlassian servers register, and
 every response is normalized text rather than raw REST JSON. See normalize.py
 for where the savings actually come from.
 
@@ -143,6 +143,39 @@ async def get_issue(key: str) -> str:
 
 @mcp.tool()
 @measured
+async def get_status_history(key: str) -> str:
+    """All status transitions for an issue, oldest first, as id-tab-from-tab-to.
+
+    Raises rather than returning a partial history when Jira pagination fails.
+    This lets the orchestrator derive an idempotent Ready for Dev entry count.
+    """
+    lines: list[str] = []
+    start_at = 0
+    for _ in range(100):
+        data = await client().status_history(key, start_at, 100)
+        values = data.get("values") or []
+        for history in values:
+            for item in history.get("items") or []:
+                if item.get("fieldId") == "status":
+                    lines.append(
+                        "\t".join(
+                            (
+                                str(history.get("id", "")),
+                                str(item.get("fromString") or ""),
+                                str(item.get("toString") or ""),
+                            )
+                        )
+                    )
+        start_at += len(values)
+        if start_at >= int(data.get("total", start_at)):
+            return "\n".join(lines) if lines else "No status transitions."
+        if not values:
+            raise JiraError("Jira returned an incomplete status history page.")
+    raise JiraError("Jira status history exceeded the pagination safety limit.")
+
+
+@mcp.tool()
+@measured
 async def get_comments(key: str, limit: int = 10) -> str:
     """Comments on an issue, newest first, bodies converted to Markdown."""
     try:
@@ -155,6 +188,39 @@ async def get_comments(key: str, limit: int = 10) -> str:
 # ---------------------------------------------------------------------------
 # Writes -- these acknowledge, they do not echo the issue back
 # ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+@measured
+async def set_workflow_state(
+    key: str,
+    operation: str,
+    loop_count: int = 0,
+    active_agent: str = "",
+) -> str:
+    """Set only orchestrator-owned Loop Count or Active Agent fields.
+
+    Operations: loop_count, active_agent. An empty active_agent clears the field.
+    Approval can only be consumed through set_dispatch_state, never granted here.
+    """
+    operation = operation.strip().lower()
+    if operation == "loop_count":
+        if loop_count < 0:
+            return "Invalid loop count: must be non-negative."
+        fields = {CUSTOM_FIELDS["loopCount"]: loop_count}
+    elif operation == "active_agent":
+        agent = active_agent.strip()
+        if agent and agent not in ("Codey", "Marge", "Bugsey"):
+            return "Invalid active agent: choose Codey, Marge, Bugsey, or blank."
+        fields = {CUSTOM_FIELDS["activeAgent"]: {"value": agent} if agent else None}
+    else:
+        return f"Unknown workflow operation {operation!r}."
+
+    try:
+        await client().update(key, fields)
+    except JiraError as exc:
+        return str(exc)
+    return f"{key} workflow state -> {operation}"
 
 
 @mcp.tool()

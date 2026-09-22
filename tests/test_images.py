@@ -172,6 +172,83 @@ def test_dispatch_state_consumes_retry_without_touching_other_fields(
     assert calls == [("AVBALL-42", {server.CUSTOM_FIELDS["devRetryApproved"]: None})]
 
 
+def test_workflow_state_writes_only_requested_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+
+    class FakeJira:
+        async def update(self, key: str, fields: dict) -> None:
+            calls.append(fields)
+
+    monkeypatch.setattr(server, "client", lambda: FakeJira())
+
+    assert asyncio.run(server.set_workflow_state("AVBALL-42", "loop_count", loop_count=6)) == (
+        "AVBALL-42 workflow state -> loop_count"
+    )
+    result = asyncio.run(
+        server.set_workflow_state("AVBALL-42", "active_agent", active_agent="Marge")
+    )
+    assert result == (
+        "AVBALL-42 workflow state -> active_agent"
+    )
+    assert asyncio.run(server.set_workflow_state("AVBALL-42", "active_agent")) == (
+        "AVBALL-42 workflow state -> active_agent"
+    )
+    assert calls == [
+        {server.CUSTOM_FIELDS["loopCount"]: 6},
+        {server.CUSTOM_FIELDS["activeAgent"]: {"value": "Marge"}},
+        {server.CUSTOM_FIELDS["activeAgent"]: None},
+    ]
+
+
+def test_status_history_reads_every_page_and_only_status_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    starts: list[int] = []
+
+    class FakeJira:
+        async def status_history(self, key: str, start_at: int, limit: int) -> dict:
+            starts.append(start_at)
+            if start_at == 0:
+                return {
+                    "total": 2,
+                    "values": [
+                        {
+                            "id": "10",
+                            "items": [
+                                {
+                                    "fieldId": "status",
+                                    "fromString": "Backlog",
+                                    "toString": "Ready for Dev",
+                                },
+                                {"fieldId": "summary", "toString": "Changed"},
+                            ],
+                        }
+                    ],
+                }
+            return {
+                "total": 2,
+                "values": [
+                    {
+                        "id": "11",
+                        "items": [
+                            {
+                                "fieldId": "status",
+                                "fromString": "Ready for Dev",
+                                "toString": "In Progress",
+                            }
+                        ],
+                    }
+                ],
+            }
+
+    monkeypatch.setattr(server, "client", lambda: FakeJira())
+
+    result = asyncio.run(server.get_status_history("AVBALL-42"))
+
+    assert result == "10\tBacklog\tReady for Dev\n11\tReady for Dev\tIn Progress"
+    assert starts == [0, 1]
+
+
 def test_decode_image_accepts_plain_base64_and_infers_type() -> None:
     encoded = base64.b64encode(PNG).decode()
 

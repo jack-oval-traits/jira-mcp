@@ -70,6 +70,13 @@ class JiraClient:
             "GET", f"{API}/issue/{key}", params={"fields": ",".join(fields)}
         )
 
+    async def status_history(self, key: str, start_at: int, limit: int) -> dict:
+        return await self._request(
+            "GET",
+            f"{API}/issue/{key}/changelog",
+            params={"startAt": start_at, "maxResults": limit},
+        )
+
     async def comments(self, key: str, limit: int) -> dict:
         return await self._request(
             "GET",
