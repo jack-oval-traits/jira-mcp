@@ -155,6 +155,23 @@ def test_dispatch_state_accepts_frontier_tier(
     assert calls[0][server.CUSTOM_FIELDS["codeyAgentProvider"]] == {"value": "Claude"}
 
 
+def test_dispatch_state_consumes_retry_without_touching_other_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class FakeJira:
+        async def update(self, key: str, fields: dict) -> None:
+            calls.append((key, fields))
+
+    monkeypatch.setattr(server, "client", lambda: FakeJira())
+
+    result = asyncio.run(server.set_dispatch_state("AVBALL-42", "consume_retry"))
+
+    assert result == "AVBALL-42 dispatch state -> consume_retry"
+    assert calls == [("AVBALL-42", {server.CUSTOM_FIELDS["devRetryApproved"]: None})]
+
+
 def test_decode_image_accepts_plain_base64_and_infers_type() -> None:
     encoded = base64.b64encode(PNG).decode()
 

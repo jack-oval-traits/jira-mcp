@@ -129,6 +129,11 @@ covers Jira issues only.
 Markdown goes in and comes out; the adapter converts to and from ADF at the
 boundary.
 
+`get_issue` includes the `devRetryApproved` value from Jira's **Dev Retry**
+single-select field (`customfield_10183`). A human may set it to `Approved` in
+Jira; `set_dispatch_state(key, "consume_retry")` clears only that field after
+the orchestrator accepts the one-time retry. It does not grant approval.
+
 `components` is a comma-separated list of component names that already exist
 in the target project. `attach_image` accepts either plain base64 or a
 `data:image/...;base64,...` URI and adds the image to Jira's Attachments section.

@@ -262,9 +262,10 @@ async def set_dispatch_state(
 ) -> str:
     """Update only the custom fields owned by the agent dispatcher.
 
-    Supported operations are ``claim``, ``heartbeat``, ``complete``, and
-    ``rollback``. A Codey claim may include its resolved tier and provider;
-    these choices remain on the issue as an audit trail after the run ends.
+    Supported operations are ``claim``, ``heartbeat``, ``complete``,
+    ``rollback``, and ``consume_retry``. A Codey claim may include its
+    resolved tier and provider; these choices remain on the issue as an audit
+    trail after the run ends.
     This deliberately does not accept arbitrary Jira field IDs.
     """
     operation = operation.strip().lower()
@@ -338,6 +339,8 @@ async def set_dispatch_state(
             CUSTOM_FIELDS["lastHeartbeat"]: None,
             CUSTOM_FIELDS["sessionLink"]: None,
         }
+    elif operation == "consume_retry":
+        fields = {CUSTOM_FIELDS["devRetryApproved"]: None}
     else:
         return f"Unknown dispatch operation {operation!r}."
 

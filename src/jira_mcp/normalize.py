@@ -40,6 +40,7 @@ CUSTOM_FIELDS = {
     "dispatchedFrom": os.environ.get("JIRA_FIELD_DISPATCHED_FROM") or "customfield_10177",
     "lastHeartbeat": os.environ.get("JIRA_FIELD_LAST_HEARTBEAT") or "customfield_10178",
     "sessionLink": os.environ.get("JIRA_FIELD_SESSION_LINK") or "customfield_10180",
+    "devRetryApproved": os.environ.get("JIRA_FIELD_DEV_RETRY_APPROVED") or "customfield_10183",
 }
 
 # These fields are being introduced after the original dispatcher dashboard.

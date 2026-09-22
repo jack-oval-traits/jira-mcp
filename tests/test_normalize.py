@@ -163,6 +163,7 @@ def test_detail_text_header_and_description():
 def test_detail_text_renders_dispatcher_custom_fields(monkeypatch):
     monkeypatch.setitem(CUSTOM_FIELDS, "codeyAgentTier", "customfield_20001")
     monkeypatch.setitem(CUSTOM_FIELDS, "codeyAgentProvider", "customfield_20002")
+    monkeypatch.setitem(CUSTOM_FIELDS, "devRetryApproved", "customfield_20003")
     values = {
         "loopCount": 3,
         "timeInStatus": "22m",
@@ -173,6 +174,7 @@ def test_detail_text_renders_dispatcher_custom_fields(monkeypatch):
         "sessionLink": "https://example.test/session/run-123",
         "codeyAgentTier": "Fast",
         "codeyAgentProvider": "Codex",
+        "devRetryApproved": {"value": "Approved"},
     }
     custom_fields = {
         CUSTOM_FIELDS[label]: value for label, value in values.items()
@@ -181,6 +183,8 @@ def test_detail_text_renders_dispatcher_custom_fields(monkeypatch):
     out = detail_text(issue(**custom_fields))
 
     for label, value in values.items():
+        if label == "devRetryApproved":
+            value = "Approved"
         assert f"{label}: {value}" in out
 
 
