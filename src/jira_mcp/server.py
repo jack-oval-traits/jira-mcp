@@ -291,13 +291,17 @@ async def set_dispatch_state(
                 )
 
             allowed_tiers = {
-                value.casefold(): value for value in ("Fast", "Standard", "Complex")
+                value.casefold(): value
+                for value in ("Fast", "Standard", "Complex", "Frontier")
             }
             allowed_providers = {value.casefold(): value for value in ("Codex", "Claude")}
             tier = allowed_tiers.get(codey_selection[0].casefold())
             provider = allowed_providers.get(codey_selection[1].casefold())
             if not tier:
-                return "Invalid Codey agent tier: choose Fast, Standard, or Complex."
+                return (
+                    "Invalid Codey agent tier: choose Fast, Standard, Complex, "
+                    "or Frontier."
+                )
             if not provider:
                 return "Invalid Codey agent provider: choose Codex or Claude."
 

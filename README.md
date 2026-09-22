@@ -166,7 +166,8 @@ The dispatcher dashboard field IDs use `JIRA_FIELD_*` variables documented in
 `JIRA_FIELD_CODEY_AGENT_PROVIDER` are optional until those Jira single-select
 fields exist. Once configured, `get_issue` returns both values and a Codey
 `set_dispatch_state(..., operation="claim")` call can write them with the
-resolved tier/provider selection.
+resolved tier/provider selection. Supported tiers are Fast, Standard, Complex,
+and Frontier; supported providers are Codex and Claude.
 
 Missing required variables fail at startup, not on the first tool call — as do
 credentials Jira turns down, which costs one round-trip to `/myself` per boot.

@@ -123,6 +123,38 @@ def test_dispatch_state_rejects_unconfigured_codey_selection_fields(
     )
 
 
+def test_dispatch_state_accepts_frontier_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict] = []
+
+    class FakeJira:
+        async def update(self, key: str, fields: dict) -> None:
+            calls.append(fields)
+
+    monkeypatch.setattr(server, "client", lambda: FakeJira())
+    monkeypatch.setitem(server.CUSTOM_FIELDS, "codeyAgentTier", "customfield_20001")
+    monkeypatch.setitem(server.CUSTOM_FIELDS, "codeyAgentProvider", "customfield_20002")
+
+    result = asyncio.run(
+        server.set_dispatch_state(
+            "AVBALL-42",
+            "claim",
+            active_agent="Codey",
+            run_id="run-42",
+            dispatched_from="Ready for Dev",
+            last_heartbeat="2026-09-21T22:30:00-05:00",
+            session_link="http://dispatcher/api/v1/runs/run-42",
+            codey_agent_tier="frontier",
+            codey_agent_provider="claude",
+        )
+    )
+
+    assert result == "AVBALL-42 dispatch state -> claim"
+    assert calls[0][server.CUSTOM_FIELDS["codeyAgentTier"]] == {"value": "Frontier"}
+    assert calls[0][server.CUSTOM_FIELDS["codeyAgentProvider"]] == {"value": "Claude"}
+
+
 def test_decode_image_accepts_plain_base64_and_infers_type() -> None:
     encoded = base64.b64encode(PNG).decode()
 
