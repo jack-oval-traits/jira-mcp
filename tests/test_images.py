@@ -45,6 +45,84 @@ def test_create_and_update_send_component_names(monkeypatch: pytest.MonkeyPatch)
     assert calls[1][1] == {"components": [{"name": "API"}]}
 
 
+def test_dispatch_state_claim_and_rollback_only_touch_owned_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class FakeJira:
+        async def update(self, key: str, fields: dict) -> None:
+            calls.append((key, fields))
+
+    monkeypatch.setattr(server, "client", lambda: FakeJira())
+    monkeypatch.setitem(server.CUSTOM_FIELDS, "codeyAgentTier", "customfield_20001")
+    monkeypatch.setitem(server.CUSTOM_FIELDS, "codeyAgentProvider", "customfield_20002")
+
+    claimed = asyncio.run(
+        server.set_dispatch_state(
+            "AVBALL-42",
+            "claim",
+            active_agent="Codey",
+            run_id="run-42",
+            dispatched_from="Ready for Dev",
+            last_heartbeat="2026-09-21T22:30:00-05:00",
+            session_link="http://dispatcher/api/v1/runs/run-42",
+            codey_agent_tier="fast",
+            codey_agent_provider="codex",
+        )
+    )
+    rolled_back = asyncio.run(server.set_dispatch_state("AVBALL-42", "rollback"))
+
+    assert claimed == "AVBALL-42 dispatch state -> claim"
+    assert rolled_back == "AVBALL-42 dispatch state -> rollback"
+    assert calls[0] == (
+        "AVBALL-42",
+        {
+            server.CUSTOM_FIELDS["activeAgent"]: {"value": "Codey"},
+            server.CUSTOM_FIELDS["runId"]: "run-42",
+            server.CUSTOM_FIELDS["dispatchedFrom"]: "Ready for Dev",
+            server.CUSTOM_FIELDS["lastHeartbeat"]: "2026-09-21T22:30:00-05:00",
+            server.CUSTOM_FIELDS["sessionLink"]: "http://dispatcher/api/v1/runs/run-42",
+            server.CUSTOM_FIELDS["codeyAgentTier"]: {"value": "Fast"},
+            server.CUSTOM_FIELDS["codeyAgentProvider"]: {"value": "Codex"},
+        },
+    )
+    assert set(calls[1][1]) == {
+        server.CUSTOM_FIELDS["activeAgent"],
+        server.CUSTOM_FIELDS["runId"],
+        server.CUSTOM_FIELDS["dispatchedFrom"],
+        server.CUSTOM_FIELDS["lastHeartbeat"],
+        server.CUSTOM_FIELDS["sessionLink"],
+    }
+    assert all(value is None for value in calls[1][1].values())
+
+
+def test_dispatch_state_rejects_unconfigured_codey_selection_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(server.CUSTOM_FIELDS, "codeyAgentTier", raising=False)
+    monkeypatch.delitem(server.CUSTOM_FIELDS, "codeyAgentProvider", raising=False)
+
+    result = asyncio.run(
+        server.set_dispatch_state(
+            "AVBALL-42",
+            "claim",
+            active_agent="Codey",
+            run_id="run-42",
+            dispatched_from="Ready for Dev",
+            last_heartbeat="2026-09-21T22:30:00-05:00",
+            session_link="http://dispatcher/api/v1/runs/run-42",
+            codey_agent_tier="Fast",
+            codey_agent_provider="Claude",
+        )
+    )
+
+    assert result == (
+        "Codey selection fields are not configured: set "
+        "JIRA_FIELD_CODEY_AGENT_TIER, JIRA_FIELD_CODEY_AGENT_PROVIDER."
+    )
+
+
 def test_decode_image_accepts_plain_base64_and_infers_type() -> None:
     encoded = base64.b64encode(PNG).decode()
 

@@ -26,6 +26,7 @@ from starlette.responses import PlainTextResponse
 from .jira import API, JiraClient, JiraError
 from .measure import measured
 from .normalize import (
+    CUSTOM_FIELDS,
     FIELDS_DETAIL,
     FIELDS_SUMMARY,
     comments_text,
@@ -244,6 +245,103 @@ async def update_issue(
     except JiraError as exc:
         return str(exc)
     return f"{key} updated: {', '.join(fields)}"
+
+
+@mcp.tool()
+@measured
+async def set_dispatch_state(
+    key: str,
+    operation: str,
+    active_agent: str = "",
+    run_id: str = "",
+    dispatched_from: str = "",
+    last_heartbeat: str = "",
+    session_link: str = "",
+    codey_agent_tier: str = "",
+    codey_agent_provider: str = "",
+) -> str:
+    """Update only the custom fields owned by the agent dispatcher.
+
+    Supported operations are ``claim``, ``heartbeat``, ``complete``, and
+    ``rollback``. A Codey claim may include its resolved tier and provider;
+    these choices remain on the issue as an audit trail after the run ends.
+    This deliberately does not accept arbitrary Jira field IDs.
+    """
+    operation = operation.strip().lower()
+
+    if operation == "claim":
+        values = (active_agent, run_id, dispatched_from, last_heartbeat, session_link)
+        if not all(value.strip() for value in values):
+            return "Invalid dispatch claim: every dispatch field is required."
+        fields = {
+            CUSTOM_FIELDS["activeAgent"]: {"value": active_agent.strip()},
+            CUSTOM_FIELDS["runId"]: run_id.strip(),
+            CUSTOM_FIELDS["dispatchedFrom"]: dispatched_from.strip(),
+            CUSTOM_FIELDS["lastHeartbeat"]: last_heartbeat.strip(),
+            CUSTOM_FIELDS["sessionLink"]: session_link.strip(),
+        }
+        codey_selection = (codey_agent_tier.strip(), codey_agent_provider.strip())
+        if any(codey_selection):
+            if active_agent.strip().casefold() != "codey":
+                return "Invalid dispatch claim: Codey selection fields require active_agent=Codey."
+            if not all(codey_selection):
+                return (
+                    "Invalid dispatch claim: codey_agent_tier and "
+                    "codey_agent_provider must be supplied together."
+                )
+
+            allowed_tiers = {
+                value.casefold(): value for value in ("Fast", "Standard", "Complex")
+            }
+            allowed_providers = {value.casefold(): value for value in ("Codex", "Claude")}
+            tier = allowed_tiers.get(codey_selection[0].casefold())
+            provider = allowed_providers.get(codey_selection[1].casefold())
+            if not tier:
+                return "Invalid Codey agent tier: choose Fast, Standard, or Complex."
+            if not provider:
+                return "Invalid Codey agent provider: choose Codex or Claude."
+
+            missing = [
+                name
+                for name in ("codeyAgentTier", "codeyAgentProvider")
+                if name not in CUSTOM_FIELDS
+            ]
+            if missing:
+                variables = ", ".join(
+                    {
+                        "codeyAgentTier": "JIRA_FIELD_CODEY_AGENT_TIER",
+                        "codeyAgentProvider": "JIRA_FIELD_CODEY_AGENT_PROVIDER",
+                    }[name]
+                    for name in missing
+                )
+                return f"Codey selection fields are not configured: set {variables}."
+
+            fields[CUSTOM_FIELDS["codeyAgentTier"]] = {"value": tier}
+            fields[CUSTOM_FIELDS["codeyAgentProvider"]] = {"value": provider}
+    elif operation == "heartbeat":
+        if not last_heartbeat.strip():
+            return "Invalid dispatch heartbeat: last_heartbeat is required."
+        fields = {CUSTOM_FIELDS["lastHeartbeat"]: last_heartbeat.strip()}
+    elif operation == "complete":
+        fields = {CUSTOM_FIELDS["activeAgent"]: None}
+        if last_heartbeat.strip():
+            fields[CUSTOM_FIELDS["lastHeartbeat"]] = last_heartbeat.strip()
+    elif operation == "rollback":
+        fields = {
+            CUSTOM_FIELDS["activeAgent"]: None,
+            CUSTOM_FIELDS["runId"]: None,
+            CUSTOM_FIELDS["dispatchedFrom"]: None,
+            CUSTOM_FIELDS["lastHeartbeat"]: None,
+            CUSTOM_FIELDS["sessionLink"]: None,
+        }
+    else:
+        return f"Unknown dispatch operation {operation!r}."
+
+    try:
+        await client().update(key, fields)
+    except JiraError as exc:
+        return str(exc)
+    return f"{key} dispatch state -> {operation}"
 
 
 @mcp.tool()

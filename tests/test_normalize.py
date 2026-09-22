@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from jira_mcp.normalize import (
+    CUSTOM_FIELDS,
     EMPTY,
     FIELDS_DETAIL,
     FIELDS_SUMMARY,
@@ -62,6 +63,10 @@ def test_detail_extends_summary():
 def test_detail_fields_include_components_and_attachments():
     assert "components" in FIELDS_DETAIL
     assert "attachment" in FIELDS_DETAIL
+
+
+def test_detail_fields_include_dispatcher_custom_fields():
+    assert set(CUSTOM_FIELDS.values()) <= set(FIELDS_DETAIL)
 
 
 # --- summary_line -----------------------------------------------------------
@@ -153,6 +158,30 @@ def test_detail_text_header_and_description():
     assert "status: In Progress" in out
     assert "## Description" in out
     assert "It throws on the second row." in out
+
+
+def test_detail_text_renders_dispatcher_custom_fields(monkeypatch):
+    monkeypatch.setitem(CUSTOM_FIELDS, "codeyAgentTier", "customfield_20001")
+    monkeypatch.setitem(CUSTOM_FIELDS, "codeyAgentProvider", "customfield_20002")
+    values = {
+        "loopCount": 3,
+        "timeInStatus": "22m",
+        "activeAgent": "Codey",
+        "runId": "run-123",
+        "dispatchedFrom": "Ready for Dev",
+        "lastHeartbeat": "2026-09-21T14:30:00.000-0500",
+        "sessionLink": "https://example.test/session/run-123",
+        "codeyAgentTier": "Fast",
+        "codeyAgentProvider": "Codex",
+    }
+    custom_fields = {
+        CUSTOM_FIELDS[label]: value for label, value in values.items()
+    }
+
+    out = detail_text(issue(**custom_fields))
+
+    for label, value in values.items():
+        assert f"{label}: {value}" in out
 
 
 def test_detail_text_omits_absent_fields():

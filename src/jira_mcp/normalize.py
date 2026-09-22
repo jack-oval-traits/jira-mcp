@@ -15,6 +15,7 @@ are pure overhead once the shape is documented in the tool description.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from marklas import to_md
@@ -31,6 +32,32 @@ FIELDS_SUMMARY = (
     "parent",
 )
 
+CUSTOM_FIELDS = {
+    "loopCount": os.environ.get("JIRA_FIELD_LOOP_COUNT") or "customfield_10174",
+    "timeInStatus": os.environ.get("JIRA_FIELD_TIME_IN_STATUS") or "customfield_10173",
+    "activeAgent": os.environ.get("JIRA_FIELD_ACTIVE_AGENT") or "customfield_10175",
+    "runId": os.environ.get("JIRA_FIELD_RUN_ID") or "customfield_10176",
+    "dispatchedFrom": os.environ.get("JIRA_FIELD_DISPATCHED_FROM") or "customfield_10177",
+    "lastHeartbeat": os.environ.get("JIRA_FIELD_LAST_HEARTBEAT") or "customfield_10178",
+    "sessionLink": os.environ.get("JIRA_FIELD_SESSION_LINK") or "customfield_10180",
+}
+
+# These fields are being introduced after the original dispatcher dashboard.
+# Keep them optional so a Jira site can upgrade the adapter before an
+# administrator has created the fields and supplied their IDs.
+CUSTOM_FIELDS.update(
+    {
+        label: field_id
+        for label, field_id in {
+            "codeyAgentTier": os.environ.get("JIRA_FIELD_CODEY_AGENT_TIER", "").strip(),
+            "codeyAgentProvider": os.environ.get(
+                "JIRA_FIELD_CODEY_AGENT_PROVIDER", ""
+            ).strip(),
+        }.items()
+        if field_id
+    }
+)
+
 FIELDS_DETAIL = FIELDS_SUMMARY + (
     "description",
     "reporter",
@@ -43,6 +70,7 @@ FIELDS_DETAIL = FIELDS_SUMMARY + (
     "attachment",
     "subtasks",
     "issuelinks",
+    *CUSTOM_FIELDS.values(),
 )
 
 EMPTY = "-"
@@ -64,6 +92,23 @@ def _person(obj: Any) -> str:
 def _day(stamp: Any) -> str:
     """Jira sends `2026-08-03T13:04:11.512-0700`; the date is what gets read."""
     return stamp[:10] if isinstance(stamp, str) and len(stamp) >= 10 else EMPTY
+
+
+def _custom_value(value: Any) -> str:
+    """Render the small set of dispatcher custom fields without leaking raw JSON."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (str, int, float)):
+        return str(value).strip()
+    if isinstance(value, list):
+        return ", ".join(filter(None, (_custom_value(item) for item in value)))
+    if isinstance(value, dict):
+        for key in ("value", "name", "displayValue", "formattedValue"):
+            if rendered := _custom_value(value.get(key)):
+                return rendered
+    return ""
 
 
 def adf_to_md(adf: Any) -> str:
@@ -157,6 +202,9 @@ def detail_text(issue: dict) -> str:
         add("subtasks", ", ".join(s.get("key", "") for s in subs))
 
     add("links", _links(f.get("issuelinks")))
+
+    for label, field_id in CUSTOM_FIELDS.items():
+        add(label, _custom_value(f.get(field_id)))
 
     body = adf_to_md(f.get("description"))
     if body:

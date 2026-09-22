@@ -1,6 +1,6 @@
 # jira-mcp
 
-A token-lean MCP server in front of Jira Cloud. Ten tools, normalized text
+A token-lean MCP server in front of Jira Cloud. Eleven tools, normalized text
 responses, ADF descriptions converted to Markdown.
 
 ## Why
@@ -119,6 +119,7 @@ covers Jira issues only.
 | `get_comments(key, limit)` | comments as Markdown, newest first |
 | `create_issue(summary, description, issue_type, project, labels, parent, components)` | `PROJ-501 created` |
 | `update_issue(key, summary, description, labels, assignee, components)` | `PROJ-443 updated: summary` |
+| `set_dispatch_state(key, operation, ...)` | updates dispatcher-owned Jira fields with a short ack |
 | `attach_image(key, filename, image_base64, content_type)` | `PROJ-443 attached image design.png` |
 | `add_comment(key, body)` | `PROJ-443 commented` |
 | `transition_issue(key, status)` | `PROJ-443 -> Done`, or lists options |
@@ -159,6 +160,13 @@ Everything is environment variables; `.env.example` documents each one.
 | `JIRA_MCP_STARTUP_CHECK` | `on` | `off` skips the startup credential probe (CI, smoke tests) |
 | `JIRA_MCP_MEASURE` | off | log per-call token counts — see [Measuring](#measuring) |
 | `LOG_LEVEL` | `info` | |
+
+The dispatcher dashboard field IDs use `JIRA_FIELD_*` variables documented in
+`.env.example`. `JIRA_FIELD_CODEY_AGENT_TIER` and
+`JIRA_FIELD_CODEY_AGENT_PROVIDER` are optional until those Jira single-select
+fields exist. Once configured, `get_issue` returns both values and a Codey
+`set_dispatch_state(..., operation="claim")` call can write them with the
+resolved tier/provider selection.
 
 Missing required variables fail at startup, not on the first tool call — as do
 credentials Jira turns down, which costs one round-trip to `/myself` per boot.
